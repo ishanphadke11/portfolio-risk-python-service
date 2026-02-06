@@ -1,0 +1,19 @@
+# Web framework
+flask>=3.0,<4.0
+flask-cors>=4.0,<5.0
+
+# Data manipulation
+pandas>=2.0,<3.0
+numpy>=1.24,<2.0
+
+# Finance data
+yfinance>=0.2.40,<0.3
+
+# Statistical analysis
+statsmodels>=0.14,<0.15
+
+# Production server
+gunicorn>=21.0,<23.0
+
+# Configuration
+python-dotenv>=1.0,<2.0
