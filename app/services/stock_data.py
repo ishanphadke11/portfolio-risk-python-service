@@ -1,6 +1,7 @@
 import yfinance as yf
 import pandas as pd
 import time
+import requests
 
 class InvalidTickerError(Exception):
     pass
@@ -8,43 +9,57 @@ class InvalidTickerError(Exception):
 class NoDataError(Exception):
     pass
 
-def fetch_stock_prices(tickers, start_date, end_date):
-    # fetch adjusted stock prices for given tickers from yahoo finance
+def _make_session():
+    # Yahoo Finance blocks requests that look like they come from servers/bots.
+    # By setting browser-like headers on the session, the request looks like it
+    # comes from a real user's browser, which avoids most rate-limiting on cloud hosts.
+    session = requests.Session()
+    session.headers.update({
+        'User-Agent': (
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+            'AppleWebKit/537.36 (KHTML, like Gecko) '
+            'Chrome/120.0.0.0 Safari/537.36'
+        ),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+    })
+    return session
 
+def fetch_stock_prices(tickers, start_date, end_date):
     if not tickers:
         raise ValueError("Tickers list can't be empty")
 
-    # Yahoo Finance rate-limits requests from cloud provider IPs (like Render).
-    # We retry up to 3 times with increasing delays to work around transient 429 errors.
     max_attempts = 3
     last_error = None
 
     for attempt in range(max_attempts):
         try:
+            # Pass our browser-like session to yfinance on every attempt
+            session = _make_session()
+
             data = yf.download(
                 tickers,
                 start=start_date,
                 end=end_date,
                 progress=False,
-                auto_adjust=True
+                auto_adjust=True,
+                session=session
             )
 
-            # If we got data, break out of the retry loop
             if not data.empty:
                 break
 
         except Exception as e:
             last_error = e
-            # Wait before retrying: 2s, then 4s, then give up
             if attempt < max_attempts - 1:
                 time.sleep(2 ** attempt * 2)
             continue
 
-        # If data is empty on this attempt, wait and retry
         if data.empty and attempt < max_attempts - 1:
             time.sleep(2 ** attempt * 2)
     else:
-        # All attempts exhausted
         if last_error:
             raise NoDataError(f"Failed to fetch data after {max_attempts} attempts: {str(last_error)}")
 
