@@ -20,6 +20,12 @@ class RateLimitError(Exception):
     pass
 
 
+# In-memory cache: (ticker, start_date, end_date) -> (fetched_at, Series)
+# Historical prices don't change, so 24h TTL is safe.
+_price_cache = {}
+_CACHE_TTL = 86400  # 24 hours
+
+
 def fetch_stock_prices(tickers, start_date, end_date):
     if not tickers:
         raise ValueError("Tickers list can't be empty")
@@ -27,7 +33,7 @@ def fetch_stock_prices(tickers, start_date, end_date):
     prices = {}
 
     for i, ticker in enumerate(tickers):
-        # small delay between each ticker to avoid hitting Yahoo Finance rate limits
+        # small delay between uncached tickers to avoid rate limiting
         if i > 0:
             time.sleep(0.5)
         prices[ticker] = _fetch_single_ticker(ticker, start_date, end_date)
@@ -41,6 +47,14 @@ def fetch_stock_prices(tickers, start_date, end_date):
 
 
 def _fetch_single_ticker(ticker, start_date, end_date):
+    cache_key = (ticker, start_date, end_date)
+
+    # return cached data if still fresh
+    if cache_key in _price_cache:
+        fetched_at, series = _price_cache[cache_key]
+        if time.time() - fetched_at < _CACHE_TTL:
+            return series
+
     max_attempts = 3
     last_error = None
     was_rate_limited = False
@@ -54,6 +68,7 @@ def _fetch_single_ticker(ticker, start_date, end_date):
                 # strip timezone so index aligns with factor data
                 if series.index.tz is not None:
                     series.index = series.index.tz_localize(None)
+                _price_cache[cache_key] = (time.time(), series)
                 return series
 
         except Exception as e:
