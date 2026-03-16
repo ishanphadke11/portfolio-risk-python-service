@@ -2,10 +2,18 @@ import yfinance as yf
 import pandas as pd
 import time
 
+try:
+    from yfinance.exceptions import YFRateLimitError
+except ImportError:
+    YFRateLimitError = None
+
 class InvalidTickerError(Exception):
     pass
 
 class NoDataError(Exception):
+    pass
+
+class RateLimitError(Exception):
     pass
 
 def fetch_stock_prices(tickers, start_date, end_date):
@@ -17,6 +25,7 @@ def fetch_stock_prices(tickers, start_date, end_date):
     # We still retry a few times in case of transient failures.
     max_attempts = 3
     last_error = None
+    was_rate_limited = False
 
     for attempt in range(max_attempts):
         try:
@@ -33,13 +42,21 @@ def fetch_stock_prices(tickers, start_date, end_date):
 
         except Exception as e:
             last_error = e
-            if attempt < max_attempts - 1:
-                time.sleep(2 ** attempt * 2)
+            if (YFRateLimitError and isinstance(e, YFRateLimitError)) or \
+               "429" in str(e) or "too many requests" in str(e).lower() or "rate limit" in str(e).lower():
+                was_rate_limited = True
+                if attempt < max_attempts - 1:
+                    time.sleep(2 ** attempt * 5)
+            else:
+                if attempt < max_attempts - 1:
+                    time.sleep(2 ** attempt * 2)
             continue
 
         if data.empty and attempt < max_attempts - 1:
             time.sleep(2 ** attempt * 2)
     else:
+        if was_rate_limited:
+            raise RateLimitError("Yahoo Finance rate limit exceeded. Please try again in a few minutes.")
         if last_error:
             raise NoDataError(f"Failed to fetch data after {max_attempts} attempts: {str(last_error)}")
 

@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from app.services.stock_data import fetch_stock_prices, InvalidTickerError, NoDataError
+from app.services.stock_data import fetch_stock_prices, InvalidTickerError, NoDataError, RateLimitError
 from app.services.factor_data import load_factor_data, FactorDataError
 from app.services.portfolio import calculate_portfolio_returns, allign_data
 from app.services.regression import run_factor_regression, format_regression_results, RegressionError
@@ -42,6 +42,9 @@ def factor_regression():
         formatted = format_regression_results(results)
 
         return jsonify(formatted), 200
+
+    except RateLimitError as e:
+        return jsonify({"error": str(e), "code": "RATE_LIMIT"}), 429
 
     except InvalidTickerError as e:
         return jsonify({"error": str(e), "code": "INVALID_TICKER"}), 404
