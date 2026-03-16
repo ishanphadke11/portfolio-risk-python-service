@@ -7,3 +7,4 @@ curl_cffi>=0.6.0
 statsmodels>=0.14,<0.15
 gunicorn>=21.0,<23.0
 python-dotenv>=1.0,<2.0
+diskcache>=5.6,<6.0
